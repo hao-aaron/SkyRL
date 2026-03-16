@@ -286,6 +286,28 @@ class VLLMServerActor(ServerActorProtocol):
             await engine.reset_prefix_cache()
             return {"status": "ok"}
 
+        @app.post("/load_lora")
+        async def _load_lora(request: Request):
+            """Load a LoRA adapter from disk into the running engine."""
+            import time as _time
+
+            from vllm.lora.request import LoRARequest
+
+            body = await request.json()
+            lora_path = body.get("lora_path")
+            if not lora_path:
+                return {"status": "error", "message": "lora_path is required"}
+
+            lora_id = int(_time.time_ns() % 0x7FFFFFFF)
+            lora_request = LoRARequest(
+                lora_name=str(lora_id),
+                lora_int_id=lora_id,
+                lora_path=lora_path,
+            )
+            await engine.add_lora(lora_request)
+            logger.info(f"Loaded LoRA adapter from {lora_path} with id {lora_id}")
+            return {"status": "ok", "lora_id": lora_id}
+
     async def shutdown(self) -> None:
         """Gracefully shutdown the server."""
         if self._server_task:

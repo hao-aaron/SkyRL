@@ -591,18 +591,30 @@ class RemoteInferenceClient:
 
     async def update_named_weights(
         self,
-        update_info: Dict[str, Any],
+        update_info: Any,
     ) -> Dict[str, Any]:
         """
-        Update weights via vLLM native /update_weights.
+        Update weights on all backends.
+
+        Handles two kinds of requests:
+        - LoraLoadRequest: loads a LoRA adapter from disk via /load_lora.
+        - Dict (NCCL metadata): pushes weights via vLLM native /update_weights.
 
         Args:
-            update_info: Dict with keys expected by vLLM (e.g. names, dtype_names,
-                shapes, packed for NCCL).
+            update_info: Either a LoraLoadRequest or a dict with keys expected
+                by vLLM (e.g. names, dtype_names, shapes, packed for NCCL).
 
         Returns:
             Dict mapping server_url to response.
         """
+        from skyrl.backends.skyrl_train.weight_sync import LoraLoadRequest
+
+        if isinstance(update_info, LoraLoadRequest):
+            return await self._call_all_servers(
+                "/load_lora",
+                {"lora_path": update_info.lora_path},
+            )
+
         return await self._call_all_servers(
             "/update_weights",
             {"update_info": update_info},
